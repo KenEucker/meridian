@@ -61,6 +61,8 @@ class ModuleRouteCoverageTest extends TestCase
         'api.commands.mark-no-show',
         'api.commands.correct-hours',
         'api.commands.calculate-event-credits',
+        'api.commands.submit-field-report',
+        'api.commands.upload-field-report-photo',
     ];
 
     public function test_every_endpoint_group_the_spec_gives_a_module_is_gated_to_it(): void
@@ -76,6 +78,10 @@ class ModuleRouteCoverageTest extends TestCase
         $matched = 0;
 
         foreach ($this->routes() as $route) {
+            if (in_array((string) $route->getName(), self::NEVER_GATED, true)) {
+                continue;
+            }
+
             $expected = $this->modulesMatching($route->uri(), $ownership);
 
             if ($expected === []) {

@@ -63,7 +63,8 @@ enum SyncedTable: string
 
     case ShiftAssignments = 'shift_assignments';
 
-    // Incident Management (MOD-002).
+    // Core authoring. Field Reports may be reviewed from IMS, but submitting a
+    // report is available even when IMS review/linking is inactive.
     case FieldReports = 'field_reports';
 
     case FieldReportAppends = 'field_report_appends';
@@ -144,6 +145,10 @@ enum SyncedTable: string
      */
     public function module(): ?ModuleKey
     {
+        if ($this === self::FieldReports || $this === self::FieldReportAppends) {
+            return null;
+        }
+
         return $this->namespace()->module();
     }
 

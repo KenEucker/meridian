@@ -72,9 +72,10 @@ final class OfflineReadSetTableOwnership
         'document_acknowledgments' => SyncedTable::DocumentAcknowledgments,
         /*
          * The Field Report form is a description of the command rather than a
-         * list of rows, and it belongs to the table it describes: an
-         * organization that does not run Incident Management is not offered a
-         * form for a report it cannot file.
+         * list of rows, and it belongs to the table it describes. The command
+         * is core: reports can be authored even when the Incident Management
+         * review/linking module is inactive. The authored-history rows below
+         * remain IMS-owned while their broader readback path is validated.
          */
         'field_report_form' => SyncedTable::FieldReports,
         'field_reports' => SyncedTable::FieldReports,

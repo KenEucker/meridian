@@ -256,13 +256,25 @@ describe("pulling the set", () => {
     expect(offlineReadSetStore.version()).toBe("version-1");
   });
 
+  it("names the HTTP status when the node refuses without a message", async () => {
+    vi.stubGlobal("fetch", respondWith(500));
+
+    expect(await pullOfflineReadSet(CONTEXT)).toEqual({
+      outcome: "refused",
+      detail: "The node answered 500 while downloading event data.",
+    });
+  });
+
   it("keeps the set when the node answers with something that is not one", async () => {
     vi.stubGlobal("fetch", respondWithSet(offlineReadSetPayload()));
     await pullOfflineReadSet(CONTEXT);
 
     vi.stubGlobal("fetch", respondWith(200, { sections: {} }));
 
-    expect((await pullOfflineReadSet(CONTEXT)).outcome).toBe("unusable");
+    expect(await pullOfflineReadSet(CONTEXT)).toEqual({
+      outcome: "unusable",
+      detail: "The node answered with event data this app could not store.",
+    });
     expect(offlineReadSetStore.version()).toBe("version-1");
   });
 });

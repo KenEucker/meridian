@@ -125,7 +125,6 @@ describe("the route ownership table", () => {
       "/credentials",
       "/waivers",
       "/ims",
-      "/field-reports",
     ];
 
     const owned = routes.filter(
@@ -158,6 +157,13 @@ describe("the route ownership table", () => {
     expect(routeModule(undefined)).toBeNull();
     expect(routeModule("a.route.nobody.wrote")).toBeNull();
   });
+
+  it("keeps staff Field Report authoring core even when IMS is inactive", () => {
+    expect(routeModule("staff.field-reports.index")).toBeNull();
+    expect(routeModule("staff.field-reports.create")).toBeNull();
+    expect(routeModule("staff.field-reports.show")).toBeNull();
+    expect(routeModule("ims.field-reports.index")).toBe(MODULE_INCIDENT_MANAGEMENT);
+  });
 });
 
 describe("the module gate on a navigation", () => {
@@ -176,6 +182,16 @@ describe("the module gate on a navigation", () => {
     expect(moduleGateRedirect({ name: "events.departments.logistics" })).toBeNull();
     expect(moduleGateRedirect({ name: "staff.documents.index" })).toBeNull();
     expect(moduleGateRedirect({ name: "home" })).toBeNull();
+  });
+
+  it("does not gate staff Field Reports when IMS is inactive", () => {
+    establish(MODULE_INCIDENT_MANAGEMENT);
+
+    expect(moduleGateRedirect({ name: "staff.field-reports.create" })).toBeNull();
+    expect(moduleGateRedirect({ name: "ims.field-reports.index" })).toEqual({
+      name: MODULE_UNAVAILABLE_ROUTE,
+      params: { moduleKey: MODULE_INCIDENT_MANAGEMENT },
+    });
   });
 
   it("decides nothing for a client that holds no session", () => {

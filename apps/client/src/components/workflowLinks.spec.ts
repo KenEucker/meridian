@@ -798,7 +798,7 @@ describe("navigation for modules the organization does not run", () => {
     expect(labels).toContain("Logistics");
   });
 
-  it("takes the Incidents workspace and every Field Report page away with Incident Management", () => {
+  it("takes Incident Command surfaces away with Incident Management while leaving staff Field Reports", () => {
     installWithout(MODULE_INCIDENT_MANAGEMENT);
 
     const labels = everyNavigationLabel();
@@ -806,7 +806,7 @@ describe("navigation for modules the organization does not run", () => {
     expect(useWorkflowLinks().value.map((link) => link.label)).not.toContain(
       "Incidents",
     );
-    expect(labels).not.toContain("My Field Reports");
+    expect(labels).toContain("My Field Reports");
     expect(labels).not.toContain("Field Reports");
     expect(labels).not.toContain("Incident Command dashboard");
   });
