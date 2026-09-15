@@ -528,10 +528,12 @@ class OfflineReadSetTest extends TestCase
             $this->assertArrayHasKey($core, $sections);
         }
 
-        // Field Report authoring/readback is core even when IMS review is off.
+        // Field Report authoring remains core even when IMS review is off; the
+        // replicated history rows stay IMS-owned until the broader readback path
+        // is validated against real local-node data.
         $this->assertArrayHasKey('field_report_form', $sections);
-        $this->assertArrayHasKey('field_reports', $sections);
-        $this->assertArrayHasKey('field_report_appends', $sections);
+        $this->assertArrayNotHasKey('field_reports', $sections);
+        $this->assertArrayNotHasKey('field_report_appends', $sections);
     }
 
     /**

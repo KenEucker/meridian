@@ -63,8 +63,8 @@ enum SyncedTable: string
 
     case ShiftAssignments = 'shift_assignments';
 
-    // Core authoring/readback. Field Reports may be reviewed from IMS, but the
-    // author's own report stream remains available even when IMS is inactive.
+    // Core authoring. Field Reports may be reviewed from IMS, but submitting a
+    // report is available even when IMS review/linking is inactive.
     case FieldReports = 'field_reports';
 
     case FieldReportAppends = 'field_report_appends';

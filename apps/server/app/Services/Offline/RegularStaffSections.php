@@ -591,9 +591,8 @@ final class RegularStaffSections implements OfflineReadSetContributor
             /*
              * "Their own submitted field reports" — the two columns FR-015
              * separates, because a taken report has an author and a submitter
-             * and both reach it. This is the model's own `forAuthor` scope, so
-             * the set and the product agree by construction about whose report
-             * this is.
+             * and both reach it. This remains IMS-owned readback for now; the
+             * always-available piece is the command/form above.
              */
             OfflineReadSetSection::core('field_reports', $this->map(
                 $reports,
