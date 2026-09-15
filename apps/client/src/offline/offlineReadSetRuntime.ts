@@ -96,6 +96,13 @@ function refusalDetail(body: unknown): string | null {
   return typeof message === "string" && message !== "" ? message : null;
 }
 
+function responseFailureDetail(response: Response, body: unknown): string {
+  return (
+    refusalDetail(body) ??
+    `The node answered ${response.status} while downloading event data.`
+  );
+}
+
 function pullPath(eventId: string | null): string {
   return eventId === null
     ? "/api/offline-read-set"
@@ -167,7 +174,7 @@ export async function pullOfflineReadSet(
   }
 
   if (!response.ok) {
-    const detail = refusalDetail(body);
+    const detail = responseFailureDetail(response, body);
 
     if (response.status === 401 || response.status === 403) {
       clearOfflineReadSet();
@@ -188,7 +195,10 @@ export async function pullOfflineReadSet(
     // Not a read set. What was held stands, because a device holding last
     // night's authorized records is better off than one holding nothing
     // (technical spec 9.3).
-    return { outcome: "unusable", detail: null };
+    return {
+      outcome: "unusable",
+      detail: "The node answered with event data this app could not store.",
+    };
   }
 
   heldSource = "network";

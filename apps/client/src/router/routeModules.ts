@@ -58,14 +58,11 @@ export const ROUTE_MODULES: Readonly<Record<string, ModuleKey>> = {
   "kiosk.shift-board": MODULE_SCHEDULING,
 
   /*
-   * Incident Management: the IC workspace and Field Reports, author's copy
-   * included. A Field Report is an IMS record wherever it is written from
-   * (`DomainNamespace::FieldReports`), so the personal author surfaces go with
-   * the restricted ones rather than counting as core because they are personal.
+   * Incident Management: the IC workspace and its Field Report review/dictation
+   * surfaces. The staff Field Report author surfaces are deliberately absent:
+   * filing and reading back your own reports is core offline capability even
+   * when IMS review/linking is inactive.
    */
-  "staff.field-reports.index": MODULE_INCIDENT_MANAGEMENT,
-  "staff.field-reports.create": MODULE_INCIDENT_MANAGEMENT,
-  "staff.field-reports.show": MODULE_INCIDENT_MANAGEMENT,
   "ims.dashboard": MODULE_INCIDENT_MANAGEMENT,
   "ims.incidents.index": MODULE_INCIDENT_MANAGEMENT,
   "ims.incidents.create": MODULE_INCIDENT_MANAGEMENT,

@@ -523,7 +523,7 @@ final class RegularStaffSections implements OfflineReadSetContributor
 
     /*
     |--------------------------------------------------------------------------
-    | The Field Report form and their own reports (Incident Management)
+    | The Field Report form and their own reports
     |--------------------------------------------------------------------------
     */
 
@@ -563,7 +563,7 @@ final class RegularStaffSections implements OfflineReadSetContributor
              * attached, and being told no at replay is the outcome the offline
              * write path exists to avoid.
              */
-            OfflineReadSetSection::owned('field_report_form', ModuleKey::IncidentManagement, [[
+            OfflineReadSetSection::core('field_report_form', [[
                 'command' => 'submit-field-report',
                 'offline_writable' => true,
                 'fields' => [
@@ -591,11 +591,10 @@ final class RegularStaffSections implements OfflineReadSetContributor
             /*
              * "Their own submitted field reports" — the two columns FR-015
              * separates, because a taken report has an author and a submitter
-             * and both reach it. This is the model's own `forAuthor` scope, so
-             * the set and the product agree by construction about whose report
-             * this is.
+             * and both reach it. This remains IMS-owned readback for now; the
+             * always-available piece is the command/form above.
              */
-            OfflineReadSetSection::owned('field_reports', ModuleKey::IncidentManagement, $this->map(
+            OfflineReadSetSection::core('field_reports', $this->map(
                 $reports,
                 fn (FieldReport $report): array => [
                     'id' => (string) $report->getKey(),
@@ -623,7 +622,7 @@ final class RegularStaffSections implements OfflineReadSetContributor
              * device holding the report without them would show a version of
              * events its author knows to be incomplete.
              */
-            OfflineReadSetSection::owned('field_report_appends', ModuleKey::IncidentManagement, $this->rows(
+            OfflineReadSetSection::core('field_report_appends', $this->rows(
                 FieldReportAppend::query()
                     ->whereIn('field_report_id', $reportIds)
                     ->orderBy('device_submitted_at')
